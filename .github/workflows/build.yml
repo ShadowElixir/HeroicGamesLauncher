@@ -45,11 +45,11 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             arch: x64
-            command: pnpm dist:linux deb pacman tar.xz rpm AppImage --x64
+            command: pnpm dist:linux deb pacman tar.xz rpm AppImage --x64 --publish=never
           - os: ubuntu-latest
             platform: linux
             arch: arm64
-            command: pnpm dist:linux deb pacman tar.xz rpm AppImage --arm64
+            command: pnpm dist:linux deb pacman tar.xz rpm AppImage --arm64 --publish=never
 
           # --- Windows Builds ---
           - os: windows-latest
