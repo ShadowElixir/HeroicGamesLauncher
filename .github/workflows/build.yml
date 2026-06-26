@@ -72,7 +72,7 @@ jobs:
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y rpm snapcraft
+          sudo apt-get install --no-install-recommends -y rpm
 
       - name: Install pnpm
         uses: pnpm/action-setup@master
