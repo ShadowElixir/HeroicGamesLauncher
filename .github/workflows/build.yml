@@ -151,7 +151,7 @@ jobs:
           ls -l release-ready/
 
       - name: Create Single GitHub Release
-        uses: softprops/action-gh-release@main
+        uses: softprops/action-gh-release@master
         with:
           tag_name: ${{ needs.check-commit.outputs.heroic_sha }}
           name: Patched Heroic Launcher (${{ needs.check-commit.outputs.heroic_sha }})
