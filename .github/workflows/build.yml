@@ -55,11 +55,11 @@ jobs:
           - os: windows-latest
             platform: windows
             arch: x64
-            command: pnpm dist:win --x64 && pnpm dist:win portable --x64 --publish=never
+            command: pnpm dist:win --x64 --publish=never && pnpm dist:win portable --x64 --publish=never
           - os: windows-latest
             platform: windows
             arch: arm64
-            command: pnpm dist:win --arm64 && pnpm dist:win portable --arm64 --publish=never
+            command: pnpm dist:win --arm64 --publish=never && pnpm dist:win portable --arm64 --publish=never
 
           # --- macOS Build ---
           - os: macos-latest
