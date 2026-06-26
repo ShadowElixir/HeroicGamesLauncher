@@ -154,8 +154,8 @@ jobs:
         uses: softprops/action-gh-release@master
         with:
           tag_name: ${{ needs.check-commit.outputs.heroic_sha }}
-          name: Patched Heroic Launcher (${{ needs.check-commit.outputs.heroic_sha }})
-          body: "Automated custom multiplatform build incorporating upstream pull request #5620."
+          name: Patched Heroic (${{ needs.check-commit.outputs.heroic_sha }})
+          body: "Heroic + pr #5620."
           draft: false
           prerelease: false
           files: release-ready/*
