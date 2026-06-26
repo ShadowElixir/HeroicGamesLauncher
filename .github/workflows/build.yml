@@ -1,0 +1,158 @@
+name: Build Patched Heroic Multiplatform
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "00 19 * * *"
+      timezone: "Asia/Beirut"
+
+jobs:
+  check-commit:
+    runs-on: ubuntu-latest
+    outputs:
+      heroic_sha: ${{ steps.get-shas.outputs.heroic }}
+      should_run: ${{ steps.get-shas.outputs.should_run }}
+    steps:
+      - name: Fetch Latest Commit SHAs
+        id: get-shas
+        run: |
+          FULL_SHA=$(curl -s "https://api.github.com/repos/Heroic-Games-Launcher/HeroicGamesLauncher/commits/main" | jq -r '.sha')
+          HEROIC_SHA="${FULL_SHA:0:7}"
+          echo "Upstream Heroic latest short commit: $HEROIC_SHA"
+          
+          # Fixed bug: Using jq native fallback instead of bash || operator
+          MY_TAG=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/latest" | jq -r '.tag_name // "none"')
+          echo "Your repository's last release tag: $MY_TAG"
+          
+          echo "heroic=$HEROIC_SHA" >> $GITHUB_OUTPUT
+          
+          if [ "$HEROIC_SHA" = "$MY_TAG" ]; then
+            echo "Match found! Upstream hasn't updated since last compilation."
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          else
+            echo "New commits detected upstream or fresh repository environment."
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    name: Build for ${{ matrix.os }} (${{ matrix.arch }})
+    needs: check-commit
+    if: needs.check-commit.outputs.should_run == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # --- Linux Builds ---
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            command: pnpm dist:linux deb pacman tar.xz rpm AppImage --x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: arm64
+            command: pnpm dist:linux deb pacman tar.xz rpm AppImage --arm64
+
+          # --- Windows Builds ---
+          - os: windows-latest
+            platform: windows
+            arch: x64
+            command: pnpm dist:win --x64 && pnpm dist:win portable --x64
+          - os: windows-latest
+            platform: windows
+            arch: arm64
+            command: pnpm dist:win --arm64 && pnpm dist:win portable --arm64
+
+          # --- macOS Build ---
+          - os: macos-latest
+            platform: macos
+            arch: universal
+            command: pnpm dist:mac --x64 --arm64 --publish=never
+
+    steps:
+      - name: Install Linux Build Utilities
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y rpm snapcraft
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@main
+        with:
+          standalone: ${{ matrix.platform == 'windows' }}
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@main
+        with:
+          node-version: latest
+
+      - name: Clone Upstream Heroic Launcher
+        run: git clone https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher.git --recurse-submodules repo
+
+      - name: Apply Pull Request Patch
+        shell: bash
+        run: |
+          cd repo
+          git fetch origin pull/5620/head
+          git diff HEAD...FETCH_HEAD | git apply
+
+      - name: Install Dependencies & Setup Binaries
+        shell: bash
+        run: |
+          cd repo
+          pnpm add --global node-gyp
+          pnpm install
+          pnpm download-helper-binaries
+
+      - name: Compile Distribution Packages
+        shell: bash
+        run: |
+          cd repo
+          ${{ matrix.command }}
+
+      - name: Upload Binaries to Workflow Storage
+        uses: actions/upload-artifact@main
+        with:
+          name: heroic-bins-${{ matrix.platform }}-${{ matrix.arch }}
+          if-no-files-found: error
+          path: |
+            repo/dist/Heroic-*-linux-*.deb
+            repo/dist/Heroic-*-linux-*.rpm
+            repo/dist/Heroic-*-linux-*.pacman
+            repo/dist/Heroic-*-linux-*.tar.xz
+            repo/dist/Heroic-*-linux-*.AppImage
+            repo/dist/Heroic-*-macOS-*.dmg
+            repo/dist/Heroic-*-macOS-*.zip
+            repo/dist/Heroic-*-Setup-*.exe
+            repo/dist/Heroic-*-Portable-*.exe
+          retention-days: 1
+
+  publish-release:
+    name: Publish Cumulative Release
+    needs: [check-commit, build]
+    if: needs.check-commit.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download All Compiled Artifacts
+        uses: actions/download-artifact@main
+        with:
+          path: all-artifacts
+
+      - name: Stage Files for Release
+        run: |
+          mkdir release-ready
+          find all-artifacts/ -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.pacman" -o -name "*.xz" -o -name "*.AppImage" -o -name "*.dmg" -o -name "*.zip" -o -name "*.exe" \) -exec cp {} release-ready/ \;
+          echo "Files ready to upload:"
+          ls -l release-ready/
+
+      - name: Create Single GitHub Release
+        uses: softprops/action-gh-release@main
+        with:
+          tag_name: ${{ needs.check-commit.outputs.heroic_sha }}
+          name: Patched Heroic Launcher (${{ needs.check-commit.outputs.heroic_sha }})
+          body: "Automated custom multiplatform build incorporating upstream pull request #5620."
+          draft: false
+          prerelease: false
+          files: release-ready/*
