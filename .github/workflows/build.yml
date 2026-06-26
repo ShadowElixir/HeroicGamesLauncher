@@ -19,7 +19,6 @@ jobs:
           HEROIC_SHA="${FULL_SHA:0:7}"
           echo "Upstream Heroic latest short commit: $HEROIC_SHA"
           
-          # Fixed bug: Using jq native fallback instead of bash || operator
           MY_TAG=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/latest" | jq -r '.tag_name // "none"')
           echo "Your repository's last release tag: $MY_TAG"
           
@@ -103,12 +102,16 @@ jobs:
           pnpm add --global node-gyp
           pnpm install
           pnpm download-helper-binaries
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
       - name: Compile Distribution Packages
         shell: bash
         run: |
           cd repo
           ${{ matrix.command }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - name: Upload Binaries to Workflow Storage
         uses: actions/upload-artifact@main
