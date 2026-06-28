@@ -93,7 +93,7 @@ jobs:
         run: |
           cd repo
           git fetch origin pull/5620/head
-          git diff HEAD...FETCH_HEAD | git apply
+          git diff HEAD...c4a84df1053b203a38b2298d7b1311f3f73b0a4d | git apply
 
       - name: Install Dependencies & Setup Binaries
         shell: bash
