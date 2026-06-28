@@ -61,7 +61,7 @@ jobs:
             arch: arm64
             command: pnpm dist:win --arm64 --publish=never && pnpm dist:win portable --arm64 --publish=never
 
-          # --- macOS Build ---
+          # --- macOS Builds ---
           - os: macos-latest
             platform: macos
             arch: universal
