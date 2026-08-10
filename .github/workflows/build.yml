@@ -92,8 +92,7 @@ jobs:
         shell: bash
         run: |
           cd repo
-          git fetch origin pull/5620/head
-          git diff HEAD...c4a84df1053b203a38b2298d7b1311f3f73b0a4d | git apply
+          curl -sL https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/pull/5620/commits/c4a84df1053b203a38b2298d7b1311f3f73b0a4d.patch | git apply --3way
 
       - name: Install Dependencies & Setup Binaries
         shell: bash
