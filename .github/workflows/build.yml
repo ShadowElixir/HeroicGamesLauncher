@@ -15,21 +15,41 @@ jobs:
       - name: Fetch Latest Commit SHAs
         id: get-shas
         run: |
-          FULL_SHA=$(curl -s "https://api.github.com/repos/Heroic-Games-Launcher/HeroicGamesLauncher/commits/main" | jq -r '.sha')
+          set -uo pipefail
+
+          # Retry until we get a valid 40-char SHA
+          FULL_SHA=""
+          for i in $(seq 1 10); do
+            FULL_SHA=$(git ls-remote https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher.git refs/heads/main 2>/dev/null | cut -f1)
+            if [[ "$FULL_SHA" =~ ^[0-9a-f]{40}$ ]]; then break; fi
+            echo "Attempt $i: got '$FULL_SHA' (invalid/null), retrying in $((i*5))s..."
+            FULL_SHA=""
+            sleep $((i*5))
+          done
+
+          # Never continue with an invalid SHA (prevents "null" releases)
+          if [ -z "$FULL_SHA" ]; then
+            echo "::error::Could not determine upstream commit SHA after 10 attempts"
+            exit 1
+          fi
           HEROIC_SHA="${FULL_SHA:0:7}"
           echo "Upstream Heroic latest short commit: $HEROIC_SHA"
-          
-          MY_TAG=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/latest" | jq -r '.tag_name // "none"')
-          echo "Last release tag: $MY_TAG"
-          
-          echo "heroic=$HEROIC_SHA" >> $GITHUB_OUTPUT
-          
-          if [ "$HEROIC_SHA" = "$MY_TAG" ]; then
-            echo "Match found! Upstream hasn't updated since last compilation."
-            echo "should_run=false" >> $GITHUB_OUTPUT
+
+          # Does a release tag for this SHA already exist?
+          TAGS=""
+          for i in $(seq 1 5); do
+            if TAGS=$(git ls-remote --tags "https://github.com/${{ github.repository }}.git" 2>/dev/null); then break; fi
+            echo "Tag lookup attempt $i failed, retrying..."
+            sleep $((i*3))
+          done
+          echo "heroic=$HEROIC_SHA" >> "$GITHUB_OUTPUT"
+
+          if echo "$TAGS" | grep -q "refs/tags/${HEROIC_SHA}$"; then
+            echo "Match found! Release $HEROIC_SHA already exists."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
           else
             echo "New commits detected upstream or fresh repository environment."
-            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
           fi
 
   build:
@@ -132,7 +152,7 @@ jobs:
   publish-release:
     name: Publish Cumulative Release
     needs: [check-commit, build]
-    if: needs.check-commit.outputs.should_run == 'true'
+    if: needs.check-commit.outputs.should_run == 'true' && needs.check-commit.outputs.heroic_sha != '' && needs.check-commit.outputs.heroic_sha != 'null'
     runs-on: ubuntu-latest
     permissions:
       contents: write
